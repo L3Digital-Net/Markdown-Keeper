@@ -88,39 +88,6 @@ def upsert_document(database_path: Path, file_path: Path, parsed: ParsedDocument
     return document_id
 
 
-def delete_document_by_path(database_path: Path, file_path: Path) -> bool:
-    with sqlite3.connect(database_path) as connection:
-        connection.execute("PRAGMA foreign_keys = ON;")
-        deleted = connection.execute(
-            "DELETE FROM documents WHERE path = ?", (str(file_path),)
-        ).rowcount
-        connection.commit()
-        return bool(deleted)
-
-
-def list_documents(database_path: Path) -> list[DocumentRecord]:
-    with sqlite3.connect(database_path) as connection:
-        rows = connection.execute(
-            """
-            SELECT id, path, title, summary, token_estimate, updated_at
-            FROM documents
-            ORDER BY updated_at DESC
-            """
-        ).fetchall()
-
-    return [
-        DocumentRecord(
-            id=int(row[0]),
-            path=str(row[1]),
-            title=str(row[2] or ""),
-            summary=str(row[3] or ""),
-            token_estimate=int(row[4] or 0),
-            updated_at=str(row[5] or ""),
-        )
-        for row in rows
-    ]
-
-
 def search_documents(database_path: Path, query: str, limit: int = 10) -> list[DocumentRecord]:
     pattern = f"%{query.strip()}%"
     with sqlite3.connect(database_path) as connection:

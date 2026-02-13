@@ -5,14 +5,10 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from markdownkeeper.api.server import run_api_server
 from markdownkeeper.config import DEFAULT_CONFIG_PATH, load_config
-from markdownkeeper.indexer.generator import generate_master_index
-from markdownkeeper.links.validator import validate_links
 from markdownkeeper.processor.parser import parse_markdown
 from markdownkeeper.storage.repository import get_document, search_documents, upsert_document
 from markdownkeeper.storage.schema import initialize_database
-from markdownkeeper.watcher.service import watch_loop
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,24 +42,6 @@ def build_parser() -> argparse.ArgumentParser:
     get_doc.add_argument("id", type=int, help="Document id")
     get_doc.add_argument("--db-path", type=Path, default=None, help="Override DB path")
     get_doc.add_argument("--format", choices=["text", "json"], default="json")
-
-    check_links = subparsers.add_parser("check-links", help="Validate indexed links")
-    check_links.add_argument("--db-path", type=Path, default=None, help="Override DB path")
-    check_links.add_argument("--format", choices=["text", "json"], default="text")
-
-    build_index = subparsers.add_parser("build-index", help="Generate markdown index files")
-    build_index.add_argument("--db-path", type=Path, default=None, help="Override DB path")
-    build_index.add_argument("--output-dir", type=Path, default=Path("_index"))
-
-    watch = subparsers.add_parser("watch", help="Watch docs and auto-index changes")
-    watch.add_argument("--db-path", type=Path, default=None, help="Override DB path")
-    watch.add_argument("--interval", type=float, default=1.0)
-    watch.add_argument("--iterations", type=int, default=None)
-
-    api = subparsers.add_parser("serve-api", help="Run JSON-RPC API server")
-    api.add_argument("--db-path", type=Path, default=None, help="Override DB path")
-    api.add_argument("--host", type=str, default=None)
-    api.add_argument("--port", type=int, default=None)
 
     return parser
 
@@ -105,7 +83,7 @@ def _handle_scan_file(args: argparse.Namespace) -> int:
 
     content = args.file.read_text(encoding="utf-8")
     parsed = parse_markdown(content)
-    document_id = upsert_document(db_path, args.file.resolve(), parsed)
+    document_id = upsert_document(db_path, args.file, parsed)
 
     if args.format == "json":
         print(
@@ -174,69 +152,6 @@ def _handle_get_doc(args: argparse.Namespace) -> int:
     return 0
 
 
-def _handle_check_links(args: argparse.Namespace) -> int:
-    db_path = _resolve_db_path(args.config, args.db_path)
-    initialize_database(db_path)
-    results = validate_links(db_path)
-    broken = [asdict(item) for item in results if item.status != "ok"]
-
-    if args.format == "json":
-        print(
-            json.dumps(
-                {
-                    "checked": len(results),
-                    "broken": len(broken),
-                    "broken_links": broken,
-                },
-                indent=2,
-            )
-        )
-    else:
-        print(f"Checked {len(results)} links; broken={len(broken)}")
-        for item in broken:
-            print(f"- [{item['link_id']}] {item['target']}")
-
-    return 0 if not broken else 1
-
-
-def _handle_build_index(args: argparse.Namespace) -> int:
-    db_path = _resolve_db_path(args.config, args.db_path)
-    initialize_database(db_path)
-    out = generate_master_index(db_path, args.output_dir)
-    print(f"Wrote index: {out}")
-    return 0
-
-
-def _handle_watch(args: argparse.Namespace) -> int:
-    config = load_config(args.config)
-    db_path = _resolve_db_path(args.config, args.db_path)
-    initialize_database(db_path)
-
-    roots = [Path(root) for root in config.watch.roots]
-    result = watch_loop(
-        database_path=db_path,
-        roots=roots,
-        extensions=config.watch.extensions,
-        interval_s=max(0.1, args.interval),
-        iterations=args.iterations,
-    )
-    print(
-        f"watch summary created={result.created} modified={result.modified} deleted={result.deleted}"
-    )
-    return 0
-
-
-def _handle_serve_api(args: argparse.Namespace) -> int:
-    config = load_config(args.config)
-    db_path = _resolve_db_path(args.config, args.db_path)
-    initialize_database(db_path)
-    host = args.host or config.api.host
-    port = args.port or config.api.port
-    print(f"Starting API server on {host}:{port}")
-    run_api_server(host, port, db_path)
-    return 0
-
-
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -247,10 +162,6 @@ def main() -> int:
         "scan-file": _handle_scan_file,
         "query": _handle_query,
         "get-doc": _handle_get_doc,
-        "check-links": _handle_check_links,
-        "build-index": _handle_build_index,
-        "watch": _handle_watch,
-        "serve-api": _handle_serve_api,
     }
 
     handler = handlers.get(args.command)

@@ -4,47 +4,29 @@ LLM-accessible markdown file database.
 
 ## Current Development Milestone
 
-This repository now includes a working foundation for MarkdownKeeper:
+This repository now includes the first implementation scaffold for MarkdownKeeper:
 
 - Python package structure under `src/markdownkeeper`
 - Config loading from `markdownkeeper.toml`
 - SQLite schema initialization for core entities (`documents`, `headings`, `links`, `events`)
-- CLI commands for indexing, retrieval, validation, indexing artifacts, watching, and API hosting:
+- CLI commands with end-to-end indexing/query basics:
   - `mdkeeper show-config`
   - `mdkeeper init-db`
   - `mdkeeper scan-file <file>`
   - `mdkeeper query <text>`
   - `mdkeeper get-doc <id>`
-  - `mdkeeper check-links`
-  - `mdkeeper build-index`
-  - `mdkeeper watch`
-  - `mdkeeper serve-api`
 
 ## Quick Start
 
 ```bash
+python -m markdownkeeper.cli.main show-config
 python -m markdownkeeper.cli.main init-db --db-path .markdownkeeper/index.db
 python -m markdownkeeper.cli.main scan-file README.md --db-path .markdownkeeper/index.db --format json
 python -m markdownkeeper.cli.main query "markdown" --db-path .markdownkeeper/index.db --format json
-python -m markdownkeeper.cli.main build-index --db-path .markdownkeeper/index.db --output-dir _index
-python -m markdownkeeper.cli.main check-links --db-path .markdownkeeper/index.db --format json
 ```
 
-## API Example
+## Planned Next Steps
 
-```bash
-python -m markdownkeeper.cli.main serve-api --db-path .markdownkeeper/index.db --host 127.0.0.1 --port 8765
-```
-
-Then call:
-
-- `POST /api/v1/query` with method `semantic_query`
-- `POST /api/v1/get_doc` with method `get_document`
-- `GET /health`
-
-## Remaining Work
-
-- Move polling watcher to kernel-backed event watcher (`inotify`/`watchdog`)
-- Add semantic embeddings + vector search
-- Add systemd packaging and daemon lifecycle management
-- Add richer index outputs (`by-tag`, `by-category`, `by-concept`)
+- Linux file watcher with event queue/debounce
+- Link validation and indexing pipeline
+- Semantic query and API service
