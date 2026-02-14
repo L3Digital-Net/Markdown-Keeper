@@ -13,6 +13,13 @@ from markdownkeeper.processor.parser import parse_markdown
 from markdownkeeper.storage.repository import find_documents_by_concept, get_document, search_documents, semantic_search_documents, upsert_document
 from markdownkeeper.storage.schema import initialize_database
 from markdownkeeper.watcher.service import is_watchdog_available, watch_loop, watch_loop_watchdog
+from markdownkeeper.storage.repository import find_documents_by_concept, get_document, search_documents, upsert_document
+from markdownkeeper.storage.schema import initialize_database
+from markdownkeeper.watcher.service import watch_loop
+from markdownkeeper.config import DEFAULT_CONFIG_PATH, load_config
+from markdownkeeper.processor.parser import parse_markdown
+from markdownkeeper.storage.repository import get_document, search_documents, upsert_document
+from markdownkeeper.storage.schema import initialize_database
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -121,6 +128,7 @@ def _handle_scan_file(args: argparse.Namespace) -> int:
     content = args.file.read_text(encoding="utf-8")
     parsed = parse_markdown(content)
     document_id = upsert_document(db_path, args.file.resolve(), parsed)
+    document_id = upsert_document(db_path, args.file, parsed)
 
     if args.format == "json":
         print(
@@ -168,6 +176,19 @@ def _handle_query(args: argparse.Namespace) -> int:
 
     if args.format == "json":
         print(json.dumps({"query": args.query, "search_mode": args.search_mode, "count": len(results), "documents": docs_payload}, indent=2))
+    results = search_documents(db_path, args.query, limit=max(1, args.limit))
+
+    if args.format == "json":
+        print(
+            json.dumps(
+                {
+                    "query": args.query,
+                    "count": len(results),
+                    "documents": [asdict(result) for result in results],
+                },
+                indent=2,
+            )
+        )
     else:
         if not results:
             print("No documents matched query")
@@ -180,6 +201,7 @@ def _handle_get_doc(args: argparse.Namespace) -> int:
     db_path = _resolve_db_path(args.config, args.db_path)
     initialize_database(db_path)
     result = get_document(db_path, args.id, include_content=args.include_content, max_tokens=args.max_tokens, section=args.section)
+    result = get_document(db_path, args.id)
 
     if result is None:
         print(f"Document id={args.id} not found")
@@ -285,6 +307,7 @@ def _handle_serve_api(args: argparse.Namespace) -> int:
     port = args.port or config.api.port
     print(f"Starting API server on {host}:{port}")
     run_api_server(host, port, db_path)
+
     return 0
 
 
