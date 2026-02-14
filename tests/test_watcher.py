@@ -20,6 +20,9 @@ from markdownkeeper.watcher.service import (
     _drain_event_queue,
     _flush_pending_events,
     _queue_events,
+    _snapshot,
+    is_watchdog_available,
+    watch_loop,
     watch_once,
 )
 
@@ -164,6 +167,107 @@ class WatcherTests(unittest.TestCase):
                 failed = int(connection.execute("SELECT COUNT(*) FROM events WHERE status='failed'").fetchone()[0])
             self.assertEqual(remaining, 0)
             self.assertEqual(failed, 0)
+
+    def test_snapshot_only_includes_matching_extensions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.md").write_text("# Markdown", encoding="utf-8")
+            (root / "b.txt").write_text("plain text", encoding="utf-8")
+            (root / "c.markdown").write_text("# Also markdown", encoding="utf-8")
+
+            snap = _snapshot([root], {".md", ".markdown"})
+            resolved_names = {p.name for p in snap}
+            self.assertIn("a.md", resolved_names)
+            self.assertIn("c.markdown", resolved_names)
+            self.assertNotIn("b.txt", resolved_names)
+
+    def test_snapshot_skips_nonexistent_roots(self) -> None:
+        snap = _snapshot([Path("/nonexistent/path/xyz")], {".md"})
+        self.assertEqual(snap, {})
+
+    def test_snapshot_recursive_finds_nested_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            nested = root / "sub" / "deep"
+            nested.mkdir(parents=True)
+            (nested / "doc.md").write_text("# Nested", encoding="utf-8")
+
+            snap = _snapshot([root], {".md"})
+            self.assertEqual(len(snap), 1)
+
+    def test_is_watchdog_available_returns_bool(self) -> None:
+        result = is_watchdog_available()
+        self.assertIsInstance(result, bool)
+
+    def test_watch_loop_with_one_iteration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            docs = root / "docs"
+            docs.mkdir(parents=True, exist_ok=True)
+            db = root / ".markdownkeeper" / "index.db"
+            initialize_database(db)
+
+            (docs / "a.md").write_text("# Doc A", encoding="utf-8")
+            result = watch_loop(db, [docs], [".md"], interval_s=0.05, iterations=1)
+            self.assertEqual(result.created, 1)
+            self.assertEqual(len(list_documents(db)), 1)
+
+    def test_handler_on_moved_records_delete_and_create(self) -> None:
+        handler = _MarkdownWatchEventHandler({".md"})
+
+        class FakeEvent:
+            def __init__(self, src: str, dest: str = "", is_dir: bool = False):
+                self.src_path = src
+                self.dest_path = dest
+                self.is_directory = is_dir
+
+        handler.on_moved(FakeEvent("/tmp/old.md", "/tmp/new.md"))
+        self.assertEqual(len(handler.deleted), 1)
+        self.assertEqual(len(handler.changed), 1)
+
+    def test_handler_ignores_directory_events(self) -> None:
+        handler = _MarkdownWatchEventHandler({".md"})
+
+        class FakeEvent:
+            def __init__(self, src: str, is_dir: bool = False):
+                self.src_path = src
+                self.is_directory = is_dir
+
+        handler.on_created(FakeEvent("/tmp/subdir", is_dir=True))
+        handler.on_modified(FakeEvent("/tmp/subdir", is_dir=True))
+        handler.on_deleted(FakeEvent("/tmp/subdir", is_dir=True))
+        self.assertEqual(len(handler.changed), 0)
+        self.assertEqual(len(handler.deleted), 0)
+
+    def test_handler_ignores_non_markdown_files(self) -> None:
+        handler = _MarkdownWatchEventHandler({".md"})
+
+        class FakeEvent:
+            def __init__(self, src: str, is_dir: bool = False):
+                self.src_path = src
+                self.is_directory = is_dir
+
+        handler.on_created(FakeEvent("/tmp/file.txt"))
+        handler.on_modified(FakeEvent("/tmp/file.py"))
+        self.assertEqual(len(handler.changed), 0)
+
+    def test_drain_empty_queue_returns_zero_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db)
+            result = _drain_event_queue(db)
+            self.assertEqual(result.created, 0)
+            self.assertEqual(result.modified, 0)
+            self.assertEqual(result.deleted, 0)
+
+    def test_queue_events_empty_lists_does_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db)
+            _queue_events(db, changed_paths=[], deleted_paths=[])
+            with sqlite3.connect(db) as conn:
+                count = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+            self.assertEqual(count, 0)
 
 
 if __name__ == "__main__":

@@ -51,10 +51,34 @@ def _chunk_document(parsed: ParsedDocument, max_words: int = 120) -> list[tuple[
     if not paragraphs:
         return []
 
+    # Build a mapping from paragraph index to the nearest preceding heading
+    heading_positions: list[tuple[int, str]] = []
+    body_lines = parsed.body.split("\n")
+    char_offset = 0
+    for line in body_lines:
+        for heading in parsed.headings:
+            if line.strip() and heading.text in line:
+                heading_positions.append((char_offset, heading.text))
+        char_offset += len(line) + 1  # +1 for newline
+
+    def _heading_for_offset(offset: int) -> str:
+        result = parsed.headings[0].text if parsed.headings else ""
+        for pos, text in heading_positions:
+            if pos <= offset:
+                result = text
+            else:
+                break
+        return result
+
     chunks: list[tuple[int, str, str, int]] = []
-    heading_path = parsed.headings[0].text if parsed.headings else ""
     idx = 0
+    char_pos = 0
     for paragraph in paragraphs:
+        # Find where this paragraph starts in the body
+        para_offset = parsed.body.find(paragraph, char_pos)
+        if para_offset >= 0:
+            char_pos = para_offset + len(paragraph)
+        heading_path = _heading_for_offset(para_offset if para_offset >= 0 else char_pos)
         words = paragraph.split()
         start = 0
         while start < len(words):
@@ -328,6 +352,7 @@ def semantic_search_documents(database_path: Path, query: str, limit: int = 10) 
         ).fetchall()
 
         query_embedding, _ = compute_embedding(cleaned)
+        current_year = str(datetime.now(tz=timezone.utc).year)
         scored: list[tuple[float, tuple[object, ...]]] = []
         for row in rows:
             document_id = int(row[0])
@@ -373,7 +398,7 @@ def semantic_search_documents(database_path: Path, query: str, limit: int = 10) 
             concepts = {str(item[0]) for item in concept_rows}
             concept_score = 1.0 if query_tokens & concepts else 0.0
 
-            freshness_bonus = 0.05 if str(row[6]).startswith(str(datetime.now(tz=timezone.utc).year)) else 0.0
+            freshness_bonus = 0.05 if str(row[6]).startswith(current_year) else 0.0
 
             score = (
                 (0.45 * vector_score)

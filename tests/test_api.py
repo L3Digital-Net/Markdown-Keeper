@@ -93,6 +93,130 @@ class ApiTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
 
+    def test_health_endpoint_returns_ok(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = root / ".markdownkeeper" / "index.db"
+            initialize_database(db)
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler(db))
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                req = Request(f"http://127.0.0.1:{port}/health", method="GET")
+                with urlopen(req, timeout=5) as resp:  # noqa: S310
+                    payload = json.loads(resp.read().decode("utf-8"))
+                self.assertEqual(payload["status"], "ok")
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_get_unknown_path_returns_404(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = root / ".markdownkeeper" / "index.db"
+            initialize_database(db)
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler(db))
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                req = Request(f"http://127.0.0.1:{port}/unknown", method="GET")
+                from urllib.error import HTTPError
+                with self.assertRaises(HTTPError) as ctx:
+                    urlopen(req, timeout=5)  # noqa: S310
+                self.assertEqual(ctx.exception.code, 404)
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_post_invalid_json_returns_400(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = root / ".markdownkeeper" / "index.db"
+            initialize_database(db)
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler(db))
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                req = Request(
+                    f"http://127.0.0.1:{port}/api/v1/query",
+                    data=b"not valid json",
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                from urllib.error import HTTPError
+                with self.assertRaises(HTTPError) as ctx:
+                    urlopen(req, timeout=5)  # noqa: S310
+                self.assertEqual(ctx.exception.code, 400)
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_post_unknown_method_returns_404(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = root / ".markdownkeeper" / "index.db"
+            initialize_database(db)
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler(db))
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                req = Request(
+                    f"http://127.0.0.1:{port}/api/v1/query",
+                    data=json.dumps({
+                        "jsonrpc": "2.0",
+                        "method": "unknown_method",
+                        "params": {},
+                        "id": 1,
+                    }).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                from urllib.error import HTTPError
+                with self.assertRaises(HTTPError) as ctx:
+                    urlopen(req, timeout=5)  # noqa: S310
+                self.assertEqual(ctx.exception.code, 404)
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_get_document_not_found_returns_404(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = root / ".markdownkeeper" / "index.db"
+            initialize_database(db)
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler(db))
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                req = Request(
+                    f"http://127.0.0.1:{port}/api/v1/get_doc",
+                    data=json.dumps({
+                        "jsonrpc": "2.0",
+                        "method": "get_document",
+                        "params": {"document_id": 99999},
+                        "id": 1,
+                    }).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                from urllib.error import HTTPError
+                with self.assertRaises(HTTPError) as ctx:
+                    urlopen(req, timeout=5)  # noqa: S310
+                self.assertEqual(ctx.exception.code, 404)
+            finally:
+                server.shutdown()
+                server.server_close()
+
 
 if __name__ == "__main__":
     unittest.main()

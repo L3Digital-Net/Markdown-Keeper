@@ -1,18 +1,24 @@
 # Project Design Document: MarkdownKeeper
 
-## *LLM-Optimized Documentation Management*
+## _LLM-Optimized Documentation Management_
 
 ## Executive Summary
 
-**MarkdownKeeper** is a Linux-native CLI utility and background service that automatically manages, organizes, and maintains markdown documentation repositories. It provides continuous monitoring, intelligent organization, link validation, and indexing capabilities for markdown-based knowledge bases, **with specialized optimizations for LLM coding agent consumption**.
+**MarkdownKeeper** is a Linux-native CLI utility and background service that
+automatically manages, organizes, and maintains markdown documentation repositories. It
+provides continuous monitoring, intelligent organization, link validation, and indexing
+capabilities for markdown-based knowledge bases, **with specialized optimizations for
+LLM coding agent consumption**.
 
-------
+---
 
 ## 1. Project Overview
 
 ### 1.1 Purpose
 
-To provide automated, continuous maintenance of markdown documentation collections with **efficient, token-optimized access for LLM coding agents**, reducing manual overhead and ensuring documentation remains accurate, accessible, and machine-queryable.
+To provide automated, continuous maintenance of markdown documentation collections with
+**efficient, token-optimized access for LLM coding agents**, reducing manual overhead
+and ensuring documentation remains accurate, accessible, and machine-queryable.
 
 ### 1.2 Key Objectives
 
@@ -21,7 +27,8 @@ To provide automated, continuous maintenance of markdown documentation collectio
 - **Search & Discovery**: Generate and maintain comprehensive indexes
 - **Quality Assurance**: Enforce documentation standards and best practices
 - **Low Overhead**: Minimal resource consumption as a background service
-- **🤖 LLM-Optimized Access**: Token-efficient querying with semantic search and progressive content delivery
+- **🤖 LLM-Optimized Access**: Token-efficient querying with semantic search and
+  progressive content delivery
 
 ### 1.3 Target Users
 
@@ -31,7 +38,7 @@ To provide automated, continuous maintenance of markdown documentation collectio
 - DevOps teams managing runbooks and procedures
 - **LLM coding agents (Claude Code, Cursor, Continue, etc.)**
 
-------
+---
 
 ## 2. System Architecture
 
@@ -138,7 +145,7 @@ To provide automated, continuous maintenance of markdown documentation collectio
   - Query result caching
   - Token budget-aware responses
 
-------
+---
 
 ## 3. Technical Specifications
 
@@ -248,9 +255,9 @@ CREATE TABLE document_concepts (
 # Core settings
 watch_directory: /var/docs/markdown
 exclude_patterns:
-  - "*.tmp"
-  - ".git/*"
-  - "node_modules/*"
+  - '*.tmp'
+  - '.git/*'
+  - 'node_modules/*'
 
 # Processing settings
 debounce_seconds: 2
@@ -259,9 +266,9 @@ max_batch_size: 50
 
 # Link validation
 external_link_check: true
-link_check_interval: 86400  # 24 hours
+link_check_interval: 86400 # 24 hours
 http_timeout: 10
-user_agent: "MarkdownKeeper/1.0"
+user_agent: 'MarkdownKeeper/1.0'
 
 # Organization rules
 auto_organize: true
@@ -274,34 +281,34 @@ required_frontmatter_fields:
 # Indexing
 index_directory: .markdownkeeper
 generate_toc: true
-toc_filename: "README.md"
+toc_filename: 'README.md'
 max_toc_depth: 3
 
 # 🤖 NEW: LLM Integration settings
 llm:
   enabled: true
-  embedding_model: "all-MiniLM-L6-v2"  # Fast, good quality
-  chunk_size: 512                       # Tokens per chunk for long docs
-  chunk_overlap: 50                     # Token overlap between chunks
-  max_results: 10                       # Default max search results
-  similarity_threshold: 0.5             # Min cosine similarity
-  
+  embedding_model: 'all-MiniLM-L6-v2' # Fast, good quality
+  chunk_size: 512 # Tokens per chunk for long docs
+  chunk_overlap: 50 # Token overlap between chunks
+  max_results: 10 # Default max search results
+  similarity_threshold: 0.5 # Min cosine similarity
+
   # Token budget management
   token_counting: true
-  default_token_budget: 8000           # Conservative default
-  
+  default_token_budget: 8000 # Conservative default
+
   # Caching
   cache_queries: true
-  cache_ttl: 3600                      # 1 hour
-  
+  cache_ttl: 3600 # 1 hour
+
   # Summary generation
   auto_summarize: true
   summary_max_tokens: 150
-  
+
   # API settings
   api_enabled: true
   api_port: 8765
-  api_bind: "127.0.0.1"               # Local only by default
+  api_bind: '127.0.0.1' # Local only by default
 
 # Service settings
 log_level: INFO
@@ -316,7 +323,7 @@ notification_methods:
 notification_email: admin@example.com
 ```
 
-------
+---
 
 ## 4. LLM Agent Integration Features
 
@@ -576,11 +583,11 @@ class LLMQueryEngine:
         # 1. Parse intent
         intent = self.parse_intent(query)
         # Types: "find_document", "learn_concept", "get_instructions", "troubleshoot"
-        
+
         # 2. Extract key concepts
         concepts = self.extract_concepts(query)
         # e.g., ["nginx", "reverse proxy", "configuration"]
-        
+
         # 3. Determine search strategy
         if intent == "find_document":
             # Direct semantic search
@@ -591,11 +598,11 @@ class LLMQueryEngine:
         elif intent == "get_instructions":
             # Prioritize guides and runbooks
             results = self.filtered_search(query, categories=["guides", "runbooks"])
-        
+
         # 4. Rank and filter
         results = self.rerank_by_relevance(results)
         results = self.apply_token_budget(results, params.max_tokens)
-        
+
         # 5. Format response
         return self.format_response(results, params.format)
 ```
@@ -712,7 +719,7 @@ mdkeeper embeddings status
 mdkeeper embeddings set-model "all-mpnet-base-v2"
 ```
 
-------
+---
 
 ## 5. Feature Specifications
 
@@ -720,7 +727,8 @@ mdkeeper embeddings set-model "all-mpnet-base-v2"
 
 **Auto-Organization Rules**:
 
-1. **Date-based Filing**: Move documents to `YYYY/MM/` subdirectories based on creation date
+1. **Date-based Filing**: Move documents to `YYYY/MM/` subdirectories based on creation
+   date
 2. **Category-based Filing**: Organize by frontmatter `category` field
 3. **Naming Standards**: Enforce kebab-case filenames
 4. **Duplicate Detection**: Identify and flag duplicate content
@@ -729,7 +737,7 @@ mdkeeper embeddings set-model "all-mpnet-base-v2"
 
 ```yaml
 ---
-title: "System Installation Guide"
+title: 'System Installation Guide'
 created: 2024-02-06
 modified: 2024-02-06
 tags: [linux, installation, tutorial]
@@ -737,7 +745,7 @@ category: guides
 status: published
 
 # NEW: LLM-specific metadata
-summary: "Complete guide for installing and configuring the system"
+summary: 'Complete guide for installing and configuring the system'
 concepts: [linux, installation, systemd, configuration]
 difficulty: intermediate
 estimated_reading_time: 15
@@ -778,19 +786,18 @@ token_count: 1420
 
    ```markdown
    # Directory Name
-   
+
    ## Contents
-   
+
    - [Document Title](./document-name.md) - Brief description (1420 tokens)
    - [Another Doc](./another-doc.md) - Brief description (890 tokens)
-   
+
    ## Subdirectories
-   
+
    - [Subfolder](./subfolder/) - 12 documents (15,340 tokens)
    ```
 
 2. **Master Index** (`_index/master.md`):
-
    - Alphabetical listing
    - By category
    - By tag
@@ -799,13 +806,11 @@ token_count: 1420
    - **NEW: By token count**
 
 3. **Search Index**:
-
    - Full-text search via Whoosh
    - **Semantic search via embeddings**
    - Queryable via CLI: `mdkeeper search "installation guide"`
 
 4. **🤖 LLM Manifest** (`.markdownkeeper/llm-manifest.json`):
-
    - Optimized for programmatic consumption
    - Includes token counts and summaries
    - Category and concept hierarchies
@@ -843,7 +848,7 @@ $ mdkeeper report
 └─────────────────────────────────────────────┘
 ```
 
-------
+---
 
 ## 6. CLI Interface
 
@@ -1009,7 +1014,7 @@ sudo mdkeeper api start
 }
 ```
 
-------
+---
 
 ## 7. Service Implementation
 
@@ -1105,7 +1110,7 @@ WantedBy=multi-user.target
 2024-02-06 14:32:17 INFO [IndexGenerator] Updated directory index
 ```
 
-------
+---
 
 ## 8. Performance Considerations
 
@@ -1173,7 +1178,7 @@ WantedBy=multi-user.target
 - Full document retrieval: <100ms
 - Summary generation: <200ms
 
-------
+---
 
 ## 9. Testing Strategy
 
@@ -1237,7 +1242,7 @@ tests/
 - Mean reciprocal rank (MRR)
 - Token efficiency (tokens used vs. value delivered)
 
-------
+---
 
 ## 10. Security Considerations
 
@@ -1280,19 +1285,19 @@ tests/
 ```yaml
 llm:
   api_enabled: true
-  api_bind: "0.0.0.0"  # Allow remote access
+  api_bind: '0.0.0.0' # Allow remote access
   api_port: 8765
   api_auth:
     enabled: true
-    method: "token"  # or "jwt"
+    method: 'token' # or "jwt"
     tokens:
-      - "secure-random-token-here"
+      - 'secure-random-token-here'
   rate_limit:
     enabled: true
     requests_per_minute: 60
 ```
 
-------
+---
 
 ## 11. Installation & Deployment
 
@@ -1367,7 +1372,7 @@ sudo -u markdownkeeper mdkeeper embeddings rebuild
 sudo systemctl start markdownkeeper markdownkeeper-api
 ```
 
-------
+---
 
 ## 12. Future Enhancements
 
@@ -1401,7 +1406,7 @@ sudo systemctl start markdownkeeper markdownkeeper-api
 - [ ] **Knowledge graph visualization**
 - [ ] **Integration with popular LLM frameworks (LangChain, LlamaIndex)**
 
-------
+---
 
 ## 13. Success Metrics
 
@@ -1425,7 +1430,7 @@ sudo systemctl start markdownkeeper markdownkeeper-api
 - **LLM agents can find relevant docs without manual exploration**
 - **Average 70% token savings vs. loading full documents**
 
-------
+---
 
 ## 14. LLM Agent Integration Examples
 
@@ -1466,10 +1471,10 @@ const results = await fetch('http://localhost:8765/api/v1/query', {
     params: {
       query: userInput,
       max_results: 5,
-      include_summary: true
+      include_summary: true,
     },
-    id: 1
-  })
+    id: 1,
+  }),
 });
 
 const docs = await results.json();
@@ -1499,7 +1504,7 @@ else
 fi
 ```
 
-------
+---
 
 ## Appendix A: File Structure Example
 
@@ -1534,7 +1539,7 @@ fi
     └── README.md
 ```
 
-------
+---
 
 ## Appendix B: API Reference
 
@@ -1601,11 +1606,10 @@ fi
 }
 ```
 
-------
+---
 
-**Document Version**: 2.0
- **Last Updated**: 2024-02-06
- **Author**: System Design
- **Status**: Ready for Implementation
+**Document Version**: 2.0 **Last Updated**: 2024-02-06 **Author**: System Design
+**Status**: Ready for Implementation
 
-**Key Enhancement**: LLM Agent Integration with token-optimized querying, semantic search, and progressive content delivery
+**Key Enhancement**: LLM Agent Integration with token-optimized querying, semantic
+search, and progressive content delivery

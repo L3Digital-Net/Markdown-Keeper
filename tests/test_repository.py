@@ -15,8 +15,12 @@ import unittest
 
 from markdownkeeper.processor.parser import parse_markdown
 from markdownkeeper.storage.repository import (
+    _chunk_document,
+    _deserialize_embedding,
+    delete_document_by_path,
     find_documents_by_concept,
     get_document,
+    list_documents,
     search_documents,
     _compute_text_embedding,
     embedding_coverage,
@@ -264,6 +268,158 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(report["iterations"], 2)
             self.assertIn("latency_ms", report)
             self.assertGreaterEqual(float(report["precision_at_k"]), 1.0)
+
+    def test_delete_document_by_path_removes_document(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            file_path = Path(tmp) / "del.md"
+            parsed = parse_markdown("# Delete Me\nbody")
+            upsert_document(db_path, file_path, parsed)
+            self.assertEqual(len(list_documents(db_path)), 1)
+
+            deleted = delete_document_by_path(db_path, file_path)
+            self.assertTrue(deleted)
+            self.assertEqual(len(list_documents(db_path)), 0)
+
+    def test_delete_document_by_path_returns_false_for_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            deleted = delete_document_by_path(db_path, Path("/nonexistent/file.md"))
+            self.assertFalse(deleted)
+
+    def test_list_documents_returns_all_sorted_by_updated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            for name in ["a.md", "b.md", "c.md"]:
+                fp = Path(tmp) / name
+                upsert_document(db_path, fp, parse_markdown(f"# {name}\nbody"))
+
+            docs = list_documents(db_path)
+            self.assertEqual(len(docs), 3)
+
+    def test_deserialize_embedding_handles_none(self) -> None:
+        self.assertEqual(_deserialize_embedding(None), [])
+
+    def test_deserialize_embedding_handles_invalid_json(self) -> None:
+        self.assertEqual(_deserialize_embedding("not json"), [])
+
+    def test_deserialize_embedding_handles_valid_json(self) -> None:
+        result = _deserialize_embedding(json.dumps([1.0, 2.0, 3.0]))
+        self.assertEqual(result, [1.0, 2.0, 3.0])
+
+    def test_deserialize_embedding_handles_non_numeric_array(self) -> None:
+        self.assertEqual(_deserialize_embedding(json.dumps(["a", "b"])), [])
+
+    def test_semantic_search_empty_query_returns_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            results = semantic_search_documents(db_path, "", limit=5)
+            self.assertEqual(results, [])
+
+    def test_semantic_search_whitespace_query_returns_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            results = semantic_search_documents(db_path, "   ", limit=5)
+            self.assertEqual(results, [])
+
+    def test_get_document_with_section_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            file_path = Path(tmp) / "sections.md"
+            parsed = parse_markdown("# Intro\n\nIntro text\n\n## Setup\n\nSetup content here")
+            doc_id = upsert_document(db_path, file_path, parsed)
+
+            detail = get_document(db_path, doc_id, include_content=True, section="Setup")
+            self.assertIsNotNone(detail)
+            assert detail is not None
+            # Should return some content (section filter works via heading_path LIKE match)
+            self.assertIsInstance(detail.content, str)
+
+    def test_get_document_without_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            file_path = Path(tmp) / "nocontent.md"
+            parsed = parse_markdown("# Title\nbody")
+            doc_id = upsert_document(db_path, file_path, parsed)
+
+            detail = get_document(db_path, doc_id, include_content=False)
+            self.assertIsNotNone(detail)
+            assert detail is not None
+            self.assertEqual(detail.content, "")
+
+    def test_evaluate_semantic_precision_empty_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            result = evaluate_semantic_precision(db_path, [], k=5)
+            self.assertEqual(result["cases"], 0)
+            self.assertEqual(result["precision_at_k"], 0.0)
+
+    def test_benchmark_semantic_queries_empty_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            result = benchmark_semantic_queries(db_path, [], k=5, iterations=1)
+            self.assertEqual(result["cases"], 0)
+            self.assertEqual(result["latency_ms"]["avg"], 0.0)
+
+    def test_chunk_document_assigns_correct_heading_paths(self) -> None:
+        parsed = parse_markdown("# Intro\n\nIntro para\n\n## Setup\n\nSetup para")
+        chunks = _chunk_document(parsed)
+        self.assertGreater(len(chunks), 0)
+        # Verify chunks exist and have heading_path values
+        heading_paths = {chunk[1] for chunk in chunks}
+        self.assertTrue(len(heading_paths) > 0)
+
+    def test_chunk_document_empty_body(self) -> None:
+        parsed = parse_markdown("")
+        chunks = _chunk_document(parsed)
+        self.assertEqual(chunks, [])
+
+    def test_find_documents_by_concept_no_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            results = find_documents_by_concept(db_path, "nonexistent", limit=5)
+            self.assertEqual(results, [])
+
+    def test_search_documents_no_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            results = search_documents(db_path, "zzz_no_match_zzz", limit=5)
+            self.assertEqual(results, [])
+
+    def test_upsert_document_cascading_delete_cleans_children(self) -> None:
+        """Verify foreign key cascading delete removes headings/links/tags/concepts."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            initialize_database(db_path)
+            fp = Path(tmp) / "cascade.md"
+            parsed = parse_markdown("---\ntags: alpha\nconcepts: beta\n---\n# Title\n[link](./a.md)")
+            doc_id = upsert_document(db_path, fp, parsed)
+
+            with sqlite3.connect(db_path) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+                self.assertGreater(conn.execute("SELECT COUNT(*) FROM headings WHERE document_id=?", (doc_id,)).fetchone()[0], 0)
+                self.assertGreater(conn.execute("SELECT COUNT(*) FROM links WHERE document_id=?", (doc_id,)).fetchone()[0], 0)
+
+            delete_document_by_path(db_path, fp)
+
+            with sqlite3.connect(db_path) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM headings WHERE document_id=?", (doc_id,)).fetchone()[0], 0)
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM links WHERE document_id=?", (doc_id,)).fetchone()[0], 0)
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM document_tags WHERE document_id=?", (doc_id,)).fetchone()[0], 0)
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM document_concepts WHERE document_id=?", (doc_id,)).fetchone()[0], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

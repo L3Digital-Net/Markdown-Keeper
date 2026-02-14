@@ -13,7 +13,7 @@ import time
 import unittest
 import warnings
 
-from markdownkeeper.daemon import reload_background, restart_background, start_background, status_background, stop_background
+from markdownkeeper.daemon import reload_background, restart_background, start_background, status_background, stop_background, _read_pid, _is_pid_running
 
 
 class DaemonTests(unittest.TestCase):
@@ -55,6 +55,57 @@ class DaemonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             pid_file = Path(tmp) / "missing.pid"
             self.assertFalse(reload_background(pid_file))
+
+    def test_read_pid_returns_none_for_empty_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "empty.pid"
+            pid_file.write_text("", encoding="utf-8")
+            self.assertIsNone(_read_pid(pid_file))
+
+    def test_read_pid_returns_none_for_invalid_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "bad.pid"
+            pid_file.write_text("not_a_number", encoding="utf-8")
+            self.assertIsNone(_read_pid(pid_file))
+
+    def test_read_pid_returns_none_for_nonexistent_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "nope.pid"
+            self.assertIsNone(_read_pid(pid_file))
+
+    def test_is_pid_running_returns_false_for_dead_pid(self) -> None:
+        self.assertFalse(_is_pid_running(999999999))
+
+    def test_stop_background_returns_false_for_missing_pid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "none.pid"
+            self.assertFalse(stop_background(pid_file))
+
+    def test_stop_background_cleans_stale_pid_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "stale.pid"
+            pid_file.write_text("999999999", encoding="utf-8")
+            stopped = stop_background(pid_file)
+            self.assertFalse(stopped)
+            self.assertFalse(pid_file.exists())
+
+    def test_status_background_returns_false_none_for_missing_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "nope.pid"
+            running, pid = status_background(pid_file)
+            self.assertFalse(running)
+            self.assertIsNone(pid)
+
+    def test_start_background_returns_existing_pid_if_running(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "dup.pid"
+            cmd = [sys.executable, "-c", "import time; time.sleep(30)"]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", ResourceWarning)
+                pid1 = start_background(cmd, pid_file)
+                pid2 = start_background(cmd, pid_file)
+            self.assertEqual(pid1, pid2)
+            stop_background(pid_file, timeout_s=2.0)
 
 
 if __name__ == "__main__":

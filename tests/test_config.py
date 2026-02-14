@@ -61,6 +61,27 @@ port = 9999
             self.assertEqual(config.watch.extensions, [".md", ".markdown"])
             self.assertEqual(config.api.host, "127.0.0.1")
 
+    def test_empty_config_file_returns_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "markdownkeeper.toml"
+            config_path.write_text("", encoding="utf-8")
+            config = load_config(config_path)
+            self.assertEqual(config.watch.debounce_ms, 500)
+            self.assertEqual(config.api.port, 8765)
+
+    def test_default_config_slots(self) -> None:
+        from markdownkeeper.config import WatchConfig, StorageConfig, ApiConfig, AppConfig
+        wc = WatchConfig()
+        self.assertEqual(wc.roots, ["."])
+        sc = StorageConfig()
+        self.assertEqual(sc.database_path, ".markdownkeeper/index.db")
+        ac = ApiConfig()
+        self.assertEqual(ac.host, "127.0.0.1")
+        app = AppConfig()
+        self.assertIsInstance(app.watch, WatchConfig)
+        self.assertIsInstance(app.storage, StorageConfig)
+        self.assertIsInstance(app.api, ApiConfig)
+
 
 if __name__ == "__main__":
     unittest.main()

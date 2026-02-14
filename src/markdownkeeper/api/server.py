@@ -40,6 +40,9 @@ def build_handler(database_path: Path):
 
         def do_POST(self) -> None:  # noqa: N802
             length = int(self.headers.get("Content-Length", "0"))
+            if length > 1_048_576:  # 1 MiB upper bound
+                self._write_json(413, _rpc_error(None, -32600, "request too large"))
+                return
             raw = self.rfile.read(length)
             try:
                 req = json.loads(raw.decode("utf-8"))
@@ -53,9 +56,9 @@ def build_handler(database_path: Path):
 
             if self.path == "/api/v1/query" and method == "semantic_query":
                 query = str(params.get("query", "")).strip()
-                max_results = int(params.get("max_results", 10))
+                max_results = min(int(params.get("max_results", 10)), 100)
                 include_content = bool(params.get("include_content", False))
-                max_tokens = int(params.get("max_tokens", 200))
+                max_tokens = min(int(params.get("max_tokens", 200)), 10_000)
                 docs = semantic_search_documents(database_path, query, limit=max(1, max_results))
                 documents: list[dict[str, Any]] = []
                 for item in docs:

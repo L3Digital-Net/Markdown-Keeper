@@ -65,10 +65,17 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 
     end = text.find("\n---\n", 4)
     if end == -1:
-        return {}, text
+        # Handle frontmatter at end of file without trailing newline
+        if text.rstrip().endswith("---") and text.find("\n---", 4) != -1:
+            end = text.find("\n---", 4)
+            raw_fm = text[4:end]
+            body = text[end + 4:].lstrip("\n")
+        else:
+            return {}, text
+    else:
+        raw_fm = text[4:end]
+        body = text[end + 5 :]
 
-    raw_fm = text[4:end]
-    body = text[end + 5 :]
     frontmatter: dict[str, Any] = {}
     for line in raw_fm.splitlines():
         if ":" not in line:
