@@ -63,6 +63,30 @@ Then call:
 - `POST /api/v1/find_concept` with method `find_by_concept`
 - `GET /health`
 
+## Milestones to v1.0.0
+
+Track progress by checking items as they are completed.
+
+### Milestone 0.8.0 — Reliability hardening
+- [ ] Implement durable watcher queue persistence and replay after restart
+- [ ] Add event coalescing and idempotent processing for create/modify/move/delete bursts
+- [ ] Validate restart-safe ingestion under rapid file changes
+
+### Milestone 0.9.0 — Semantic search quality
+- [ ] Promote model-backed embeddings as primary runtime path (with fallback retained)
+- [ ] Add chunk-level embedding retrieval and stronger hybrid ranking (vector + lexical + concept + freshness)
+- [ ] Add evaluation harness for precision@5 and semantic regression tests
+
+### Milestone 0.9.5 — Operations and packaging
+- [ ] Finalize systemd hardening, lifecycle semantics, and config reload behavior
+- [ ] Publish deployment runbook (install, upgrade, rollback, troubleshooting)
+- [ ] Add structured metrics/logging for queue lag, embedding throughput, and API/query latency
+
+### Milestone 1.0.0 — Release readiness
+- [ ] Run full integration/performance suite and meet KPI targets
+- [ ] Freeze CLI/API contracts and document compatibility guarantees
+- [ ] Publish changelog, migration notes, and tag `v1.0.0`
+
 ## Remaining Work
 
 - Harden watcher queue semantics and crash-safe replay for high event bursts
