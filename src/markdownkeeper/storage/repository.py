@@ -718,6 +718,61 @@ def _select_content(
     return "\n\n".join(selected)
 
 
+def generate_health_report(database_path: Path) -> dict[str, object]:
+    """Aggregate health metrics across all subsystems."""
+    with sqlite3.connect(database_path) as connection:
+        total_docs = int(connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0])
+        total_tokens = int(connection.execute(
+            "SELECT COALESCE(SUM(token_estimate), 0) FROM documents"
+        ).fetchone()[0])
+
+        broken_internal = int(connection.execute(
+            "SELECT COUNT(*) FROM links WHERE is_external = 0 AND status = 'broken'"
+        ).fetchone()[0])
+        broken_external = int(connection.execute(
+            "SELECT COUNT(*) FROM links WHERE is_external = 1 AND status = 'broken'"
+        ).fetchone()[0])
+        unchecked_external = int(connection.execute(
+            "SELECT COUNT(*) FROM links WHERE is_external = 1 AND (status = 'unknown' OR status IS NULL)"
+        ).fetchone()[0])
+
+        missing_summaries = int(connection.execute(
+            "SELECT COUNT(*) FROM documents WHERE summary IS NULL OR TRIM(summary) = ''"
+        ).fetchone()[0])
+
+        embedded = int(connection.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE embedding IS NOT NULL AND LENGTH(TRIM(embedding)) > 0"
+        ).fetchone()[0])
+        coverage_pct = round((embedded / total_docs * 100) if total_docs > 0 else 0.0, 1)
+
+        cache_entries = int(connection.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0])
+        cache_hits = int(connection.execute(
+            "SELECT COALESCE(SUM(hit_count), 0) FROM query_cache"
+        ).fetchone()[0])
+
+        queue_queued = int(connection.execute(
+            "SELECT COUNT(*) FROM events WHERE status = 'queued'"
+        ).fetchone()[0])
+        queue_failed = int(connection.execute(
+            "SELECT COUNT(*) FROM events WHERE status = 'failed'"
+        ).fetchone()[0])
+
+    return {
+        "total_documents": total_docs,
+        "total_tokens": total_tokens,
+        "broken_internal_links": broken_internal,
+        "broken_external_links": broken_external,
+        "unchecked_external_links": unchecked_external,
+        "missing_summaries": missing_summaries,
+        "embedding_coverage_pct": coverage_pct,
+        "embedded_documents": embedded,
+        "cache_entries": cache_entries,
+        "cache_total_hits": cache_hits,
+        "queue_queued": queue_queued,
+        "queue_failed": queue_failed,
+    }
+
+
 def get_document(
     database_path: Path,
     document_id: int,

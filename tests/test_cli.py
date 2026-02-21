@@ -686,5 +686,32 @@ extensions=[".md"]
                 self.assertEqual(code, 1)
 
 
+    def test_report_json_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            md_file = Path(tmp) / "doc.md"
+            md_file.write_text("# Report Test\nhello world", encoding="utf-8")
+            with mock.patch("sys.argv", ["mdkeeper", "scan-file", str(md_file), "--db-path", str(db_path)]):
+                main()
+
+            out = io.StringIO()
+            with mock.patch("sys.argv", ["mdkeeper", "report", "--db-path", str(db_path), "--format", "json"]):
+                with contextlib.redirect_stdout(out):
+                    code = main()
+            self.assertEqual(code, 0)
+            payload = json.loads(out.getvalue())
+            self.assertEqual(payload["total_documents"], 1)
+
+    def test_report_text_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / ".markdownkeeper" / "index.db"
+            out = io.StringIO()
+            with mock.patch("sys.argv", ["mdkeeper", "report", "--db-path", str(db_path), "--format", "text"]):
+                with contextlib.redirect_stdout(out):
+                    code = main()
+            self.assertEqual(code, 0)
+            self.assertIn("Health Report", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

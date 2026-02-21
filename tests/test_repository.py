@@ -30,6 +30,7 @@ from markdownkeeper.storage.repository import (
     semantic_search_documents,
     system_stats,
     upsert_document,
+    generate_health_report,
 )
 from markdownkeeper.storage.schema import initialize_database
 
@@ -497,6 +498,48 @@ class QueryCacheTests(unittest.TestCase):
                 row = conn.execute("SELECT created_at FROM query_cache LIMIT 1").fetchone()
             self.assertIsNotNone(row)
             self.assertNotIn("2020", str(row[0]))
+
+
+class HealthReportTests(unittest.TestCase):
+    def test_report_on_empty_db(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "index.db"
+            initialize_database(db_path)
+            report = generate_health_report(db_path)
+        self.assertEqual(report["total_documents"], 0)
+        self.assertEqual(report["total_tokens"], 0)
+        self.assertEqual(report["broken_internal_links"], 0)
+        self.assertEqual(report["broken_external_links"], 0)
+        self.assertEqual(report["missing_summaries"], 0)
+
+    def test_report_on_populated_db(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "index.db"
+            initialize_database(db_path)
+
+            md1 = Path(tmp) / "doc1.md"
+            md1.write_text("# Doc 1\n[bad](./missing.md)\n[ext](https://example.com)", encoding="utf-8")
+            upsert_document(db_path, md1, parse_markdown(md1.read_text(encoding="utf-8")))
+
+            md2 = Path(tmp) / "doc2.md"
+            md2.write_text("---\nsummary: Has summary\n---\n# Doc 2", encoding="utf-8")
+            upsert_document(db_path, md2, parse_markdown(md2.read_text(encoding="utf-8")))
+
+            report = generate_health_report(db_path)
+
+        self.assertEqual(report["total_documents"], 2)
+        self.assertGreater(report["total_tokens"], 0)
+        self.assertIn("embedding_coverage_pct", report)
+        self.assertIn("cache_entries", report)
+        self.assertIn("queue_queued", report)
+
+    def test_report_json_serializable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "index.db"
+            initialize_database(db_path)
+            report = generate_health_report(db_path)
+        serialized = json.dumps(report)
+        self.assertIsInstance(serialized, str)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ from markdownkeeper.indexer.generator import generate_all_indexes
 from markdownkeeper.links.validator import validate_links
 from markdownkeeper.processor.parser import parse_markdown
 from markdownkeeper.service import write_systemd_units
-from markdownkeeper.storage.repository import benchmark_semantic_queries, embedding_coverage, evaluate_semantic_precision, find_documents_by_concept, get_document, regenerate_embeddings, search_documents, semantic_search_documents, system_stats, upsert_document
+from markdownkeeper.storage.repository import benchmark_semantic_queries, embedding_coverage, evaluate_semantic_precision, find_documents_by_concept, generate_health_report, get_document, regenerate_embeddings, search_documents, semantic_search_documents, system_stats, upsert_document
 from markdownkeeper.storage.schema import initialize_database
 from markdownkeeper.watcher.service import is_watchdog_available, watch_loop, watch_loop_watchdog
 
@@ -130,6 +130,10 @@ def build_parser() -> argparse.ArgumentParser:
     stats = subparsers.add_parser("stats", help="Show operational metrics summary")
     stats.add_argument("--db-path", type=Path, default=None, help="Override DB path")
     stats.add_argument("--format", choices=["text", "json"], default="json")
+
+    report = subparsers.add_parser("report", help="Show health report")
+    report.add_argument("--db-path", type=Path, default=None, help="Override DB path")
+    report.add_argument("--format", choices=["text", "json"], default="text")
 
     systemd = subparsers.add_parser("write-systemd", help="Generate systemd service unit files")
     systemd.add_argument("--output-dir", type=Path, default=Path("deploy/systemd"))
@@ -455,6 +459,34 @@ def _handle_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_report(args: argparse.Namespace) -> int:
+    db_path = _resolve_db_path(args.config, args.db_path)
+    initialize_database(db_path)
+    report = generate_health_report(db_path)
+
+    if args.format == "json":
+        print(json.dumps(report, indent=2))
+    else:
+        lines = [
+            "┌──────────────────────────────────────────┐",
+            "│ MarkdownKeeper Health Report             │",
+            "├──────────────────────────────────────────┤",
+            f"│ Total Documents: {report['total_documents']:<24}│",
+            f"│ Total Tokens: {report['total_tokens']:<27}│",
+            f"│ Broken Internal Links: {report['broken_internal_links']:<18}│",
+            f"│ Broken External Links: {report['broken_external_links']:<18}│",
+            f"│ Unchecked External Links: {report['unchecked_external_links']:<15}│",
+            f"│ Missing Summaries: {report['missing_summaries']:<22}│",
+            f"│ Embedding Coverage: {f'{report['embedding_coverage_pct']}%':<21}│",
+            f"│ Cache Entries: {report['cache_entries']:<26}│",
+            f"│ Cache Hits: {report['cache_total_hits']:<29}│",
+            f"│ Event Queue: {f'{report['queue_queued']} queued / {report['queue_failed']} failed':<28}│",
+            "└──────────────────────────────────────────┘",
+        ]
+        print("\n".join(lines))
+    return 0
+
+
 def _handle_semantic_benchmark(args: argparse.Namespace) -> int:
     db_path = _resolve_db_path(args.config, args.db_path)
     initialize_database(db_path)
@@ -541,6 +573,7 @@ def main() -> int:
         "embeddings-status": _handle_embeddings_status,
         "embeddings-eval": _handle_embeddings_eval,
         "stats": _handle_stats,
+        "report": _handle_report,
         "semantic-benchmark": _handle_semantic_benchmark,
         "write-systemd": _handle_write_systemd,
     }
