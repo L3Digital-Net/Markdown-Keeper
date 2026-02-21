@@ -248,6 +248,7 @@ class RepositoryTests(unittest.TestCase):
             self.assertIn("documents", payload)
             self.assertIn("queue", payload)
             self.assertIn("embeddings", payload)
+            self.assertIn("cache", payload)
 
 
     def test_benchmark_semantic_queries_reports_latency_and_precision(self) -> None:
@@ -419,6 +420,83 @@ class RepositoryTests(unittest.TestCase):
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM links WHERE document_id=?", (doc_id,)).fetchone()[0], 0)
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM document_tags WHERE document_id=?", (doc_id,)).fetchone()[0], 0)
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM document_concepts WHERE document_id=?", (doc_id,)).fetchone()[0], 0)
+
+
+class QueryCacheTests(unittest.TestCase):
+    def test_semantic_search_cache_hit_returns_same_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "index.db"
+            initialize_database(db_path)
+            md = Path(tmp) / "doc.md"
+            md.write_text("# Cache Test\ncaching query results", encoding="utf-8")
+            upsert_document(db_path, md, parse_markdown(md.read_text(encoding="utf-8")))
+
+            r1 = semantic_search_documents(db_path, "caching")
+            r2 = semantic_search_documents(db_path, "caching")
+            self.assertEqual([d.id for d in r1], [d.id for d in r2])
+
+    def test_cache_invalidated_on_upsert(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "index.db"
+            initialize_database(db_path)
+            md = Path(tmp) / "doc.md"
+            md.write_text("# Alpha\nalpha content", encoding="utf-8")
+            upsert_document(db_path, md, parse_markdown(md.read_text(encoding="utf-8")))
+
+            semantic_search_documents(db_path, "alpha")
+
+            # Verify cache has entries
+            with sqlite3.connect(db_path) as conn:
+                count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
+            self.assertGreater(count, 0)
+
+            # Upsert should invalidate
+            md.write_text("# Beta\nbeta content", encoding="utf-8")
+            upsert_document(db_path, md, parse_markdown(md.read_text(encoding="utf-8")))
+
+            with sqlite3.connect(db_path) as conn:
+                count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
+            self.assertEqual(count, 0)
+
+    def test_cache_invalidated_on_delete(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "index.db"
+            initialize_database(db_path)
+            md = Path(tmp) / "doc.md"
+            md.write_text("# Del\ndeletable content", encoding="utf-8")
+            upsert_document(db_path, md, parse_markdown(md.read_text(encoding="utf-8")))
+            semantic_search_documents(db_path, "deletable")
+
+            delete_document_by_path(db_path, md)
+
+            with sqlite3.connect(db_path) as conn:
+                count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
+            self.assertEqual(count, 0)
+
+    def test_cache_ttl_expired_entry_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "index.db"
+            initialize_database(db_path)
+            md = Path(tmp) / "doc.md"
+            md.write_text("# TTL\nttl test content", encoding="utf-8")
+            upsert_document(db_path, md, parse_markdown(md.read_text(encoding="utf-8")))
+
+            semantic_search_documents(db_path, "ttl test")
+
+            # Manually backdate the cache entry
+            with sqlite3.connect(db_path) as conn:
+                conn.execute("UPDATE query_cache SET created_at = '2020-01-01T00:00:00+00:00'")
+                conn.commit()
+
+            # Search again — should not use expired cache (re-executes search)
+            results = semantic_search_documents(db_path, "ttl test")
+            self.assertGreater(len(results), 0)
+
+            # Verify expired entry was replaced with a fresh one
+            with sqlite3.connect(db_path) as conn:
+                row = conn.execute("SELECT created_at FROM query_cache LIMIT 1").fetchone()
+            self.assertIsNotNone(row)
+            self.assertNotIn("2020", str(row[0]))
 
 
 if __name__ == "__main__":

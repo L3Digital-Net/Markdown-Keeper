@@ -221,6 +221,7 @@ def upsert_document(database_path: Path, file_path: Path, parsed: ParsedDocument
             (document_id, json.dumps(embedding), model_name, now),
         )
 
+        _invalidate_cache(connection)
         connection.commit()
 
     return document_id
@@ -232,6 +233,7 @@ def delete_document_by_path(database_path: Path, file_path: Path) -> bool:
         deleted = connection.execute(
             "DELETE FROM documents WHERE path = ?", (str(file_path),)
         ).rowcount
+        _invalidate_cache(connection)
         connection.commit()
         return bool(deleted)
 
@@ -287,14 +289,27 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float:
     return cosine_similarity(left, right)
 
 
-def _fetch_cache(connection: sqlite3.Connection, query_hash: str) -> list[int] | None:
+def _fetch_cache(connection: sqlite3.Connection, query_hash: str, ttl_seconds: int = 3600) -> list[int] | None:
     row = connection.execute(
-        "SELECT id, result_json FROM query_cache WHERE query_hash = ?",
+        "SELECT id, result_json, created_at FROM query_cache WHERE query_hash = ?",
         (query_hash,),
     ).fetchone()
     if row is None:
         return None
     cache_id = int(row[0])
+    created_at_str = str(row[2])
+
+    # TTL check
+    try:
+        created_ts = datetime.fromisoformat(created_at_str).timestamp()
+        age = time.time() - created_ts
+        if age > ttl_seconds:
+            connection.execute("DELETE FROM query_cache WHERE id = ?", (cache_id,))
+            return None
+    except ValueError:
+        connection.execute("DELETE FROM query_cache WHERE id = ?", (cache_id,))
+        return None
+
     payload = json.loads(str(row[1]))
     connection.execute(
         "UPDATE query_cache SET hit_count = hit_count + 1, last_accessed = ? WHERE id = ?",
@@ -319,7 +334,12 @@ def _store_cache(connection: sqlite3.Connection, query_hash: str, query_text: st
     )
 
 
-def semantic_search_documents(database_path: Path, query: str, limit: int = 10) -> list[DocumentRecord]:
+def _invalidate_cache(connection: sqlite3.Connection) -> None:
+    """Clear all cached query results."""
+    connection.execute("DELETE FROM query_cache")
+
+
+def semantic_search_documents(database_path: Path, query: str, limit: int = 10, ttl_seconds: int = 3600) -> list[DocumentRecord]:
     cleaned = query.strip().lower()
     if not cleaned:
         return []
@@ -328,7 +348,7 @@ def semantic_search_documents(database_path: Path, query: str, limit: int = 10) 
 
     with sqlite3.connect(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
-        cached_ids = _fetch_cache(connection, query_hash)
+        cached_ids = _fetch_cache(connection, query_hash, ttl_seconds=ttl_seconds)
         if cached_ids:
             placeholders = ",".join("?" for _ in cached_ids)
             rows = connection.execute(
@@ -530,6 +550,8 @@ def system_stats(database_path: Path, model_name: str = "all-MiniLM-L6-v2") -> d
         ).fetchone()
         docs = int(connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0])
         links = int(connection.execute("SELECT COUNT(*) FROM links").fetchone()[0])
+        cache_entries = int(connection.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0])
+        cache_hits = int(connection.execute("SELECT COALESCE(SUM(hit_count), 0) FROM query_cache").fetchone()[0])
 
     queue_lag_seconds = 0.0
     if oldest and oldest[0]:
@@ -544,6 +566,7 @@ def system_stats(database_path: Path, model_name: str = "all-MiniLM-L6-v2") -> d
         "links": links,
         "queue": {"queued": queued, "failed": failed, "lag_seconds": round(queue_lag_seconds, 3)},
         "embeddings": coverage,
+        "cache": {"entries": cache_entries, "total_hits": cache_hits},
     }
 
 

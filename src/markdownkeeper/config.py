@@ -33,11 +33,18 @@ class MetadataConfig:
 
 
 @dataclass(slots=True)
+class CacheConfig:
+    enabled: bool = True
+    ttl_seconds: int = 3600
+
+
+@dataclass(slots=True)
 class AppConfig:
     watch: WatchConfig = field(default_factory=WatchConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     api: ApiConfig = field(default_factory=ApiConfig)
     metadata: MetadataConfig = field(default_factory=MetadataConfig)
+    cache: CacheConfig = field(default_factory=CacheConfig)
 
 
 DEFAULT_CONFIG_PATH = Path("markdownkeeper.toml")
@@ -54,6 +61,7 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> AppConfig:
     storage = raw.get("storage", {})
     api = raw.get("api", {})
     metadata = raw.get("metadata", {})
+    cache = raw.get("cache", {})
 
     return AppConfig(
         watch=WatchConfig(
@@ -71,5 +79,9 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         metadata=MetadataConfig(
             required_frontmatter_fields=list(metadata.get("required_frontmatter_fields", ["title"])),
             auto_fill_category=bool(metadata.get("auto_fill_category", True)),
+        ),
+        cache=CacheConfig(
+            enabled=bool(cache.get("enabled", True)),
+            ttl_seconds=int(cache.get("ttl_seconds", 3600)),
         ),
     )
