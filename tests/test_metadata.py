@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from markdownkeeper.metadata.manager import auto_fill, enforce_schema, extract_concepts
+from markdownkeeper.metadata.summarizer import generate_summary
 from markdownkeeper.processor.parser import parse_markdown
 
 
@@ -74,6 +75,40 @@ class ExtractConceptsTests(unittest.TestCase):
         text = "the the the and and for for with with"
         concepts = extract_concepts(text)
         self.assertEqual(concepts, [])
+
+
+class SummarizerTests(unittest.TestCase):
+    def test_preserves_frontmatter_summary(self) -> None:
+        parsed = parse_markdown("---\nsummary: My explicit summary\n---\n# Doc\nBody text.")
+        result = generate_summary(parsed)
+        self.assertEqual(result, "My explicit summary")
+
+    def test_generates_from_headings_and_body(self) -> None:
+        md = "# Installation Guide\n\n## Prerequisites\n\nYou need Python 3.10.\n\n## Steps\n\nRun the installer."
+        parsed = parse_markdown(md)
+        result = generate_summary(parsed)
+        self.assertIn("Installation Guide", result)
+        self.assertIn("Prerequisites", result)
+        self.assertIn("Steps", result)
+        self.assertIn("Python 3.10", result)
+
+    def test_truncates_to_max_tokens(self) -> None:
+        md = "# Title\n\n" + "word " * 500
+        parsed = parse_markdown(md)
+        result = generate_summary(parsed, max_tokens=20)
+        self.assertLessEqual(len(result.split()), 30)  # some overhead for structure
+
+    def test_empty_document(self) -> None:
+        parsed = parse_markdown("")
+        result = generate_summary(parsed)
+        self.assertIsInstance(result, str)
+
+    def test_headings_only_no_body(self) -> None:
+        md = "# Title\n## Section A\n## Section B"
+        parsed = parse_markdown(md)
+        result = generate_summary(parsed)
+        self.assertIn("Title", result)
+        self.assertIn("Section A", result)
 
 
 if __name__ == "__main__":

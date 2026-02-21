@@ -9,6 +9,7 @@ import sqlite3
 import statistics
 import time
 
+from markdownkeeper.metadata.summarizer import generate_summary
 from markdownkeeper.processor.parser import ParsedDocument
 from markdownkeeper.query.embeddings import compute_embedding, cosine_similarity, is_model_embedding_available
 
@@ -107,6 +108,7 @@ def upsert_document(database_path: Path, file_path: Path, parsed: ParsedDocument
     with sqlite3.connect(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
         now = _utc_now_iso()
+        summary = parsed.summary or generate_summary(parsed)
         connection.execute(
             """
             INSERT INTO documents(path, title, summary, category, content, content_hash, token_estimate, updated_at, processed_at)
@@ -124,7 +126,7 @@ def upsert_document(database_path: Path, file_path: Path, parsed: ParsedDocument
             (
                 str(file_path),
                 parsed.title,
-                parsed.summary,
+                summary,
                 parsed.category,
                 parsed.body,
                 parsed.content_hash,
@@ -199,7 +201,7 @@ def upsert_document(database_path: Path, file_path: Path, parsed: ParsedDocument
         embedding_source = " ".join(
             [
                 str(parsed.title or ""),
-                str(parsed.summary or ""),
+                str(summary or ""),
                 str(parsed.body or ""),
                 " ".join(parsed.tags),
                 " ".join(parsed.concepts),
