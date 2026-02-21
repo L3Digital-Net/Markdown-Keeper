@@ -1,8 +1,10 @@
 {
   "name": "MarkdownKeeper Dev",
-  "image": "mcr.microsoft.com/devcontainers/python:3.12",
-  "onCreateCommand": "bash .devcontainer/post-create.sh",
-  "postStartCommand": "python -c 'import markdownkeeper; print(f\"mdkeeper {markdownkeeper.__version__} ready\")'",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "postStartCommand": "pip install -e '.[embeddings,faiss]' --quiet",
   "customizations": {
     "vscode": {
       "settings": {
