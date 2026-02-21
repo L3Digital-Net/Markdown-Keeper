@@ -12,6 +12,7 @@ import time
 from markdownkeeper.metadata.summarizer import generate_summary
 from markdownkeeper.processor.parser import ParsedDocument
 from markdownkeeper.query.embeddings import compute_embedding, cosine_similarity, is_model_embedding_available
+from markdownkeeper.query.faiss_index import FaissIndex, is_faiss_available as is_faiss_index_available
 
 
 @dataclass(slots=True)
@@ -476,6 +477,21 @@ def regenerate_embeddings(database_path: Path, model_name: str = "all-MiniLM-L6-
                 (document_id, json.dumps(embedding), resolved_model, now),
             )
             updated += 1
+        # Rebuild FAISS index from all embeddings
+        all_embeddings: list[tuple[int, list[float]]] = []
+        for row in rows:
+            doc_id = int(row[0])
+            emb_row = connection.execute(
+                "SELECT embedding FROM embeddings WHERE document_id = ?", (doc_id,)
+            ).fetchone()
+            if emb_row and emb_row[0]:
+                all_embeddings.append((doc_id, _deserialize_embedding(emb_row[0])))
+
+        faiss_idx = FaissIndex()
+        faiss_idx.build(all_embeddings)
+        index_path = database_path.parent / "faiss.index"
+        faiss_idx.save(index_path)
+
         connection.commit()
         return updated
 
