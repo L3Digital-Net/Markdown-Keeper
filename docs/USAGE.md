@@ -38,7 +38,7 @@ LLM-optimized markdown documentation management service.
 ### From source
 
 ```bash
-git clone https://github.com/L3DigitalNet/Markdown-Keeper.git
+git clone https://github.com/L3Digital-Net/Markdown-Keeper.git
 cd Markdown-Keeper
 pip install .
 ```
