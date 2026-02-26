@@ -38,7 +38,15 @@ mdkeeper scan-file README.md --db-path .markdownkeeper/index.db --format json
 mdkeeper query "markdown" --db-path .markdownkeeper/index.db --format json
 ```
 
-No linter or type checker is configured in CI. Tests use `unittest.TestCase` (not pytest fixtures) and create temporary databases via `tempfile.TemporaryDirectory`.
+```bash
+# Integration tests (devcontainer only — requires sentence-transformers + faiss-cpu)
+bash scripts/run-integration-tests.sh
+
+# Run integration tests directly with pytest
+python -m pytest tests/integration/ -v --tb=short
+```
+
+No linter or type checker is configured in CI. Tests use `unittest.TestCase` (not pytest fixtures) and create temporary databases via `tempfile.TemporaryDirectory`. Integration tests in `tests/integration/` require the devcontainer environment with ML dependencies.
 
 ## Git Conventions
 

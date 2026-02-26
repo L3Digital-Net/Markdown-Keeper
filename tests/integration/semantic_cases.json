@@ -1,0 +1,77 @@
+[
+  {
+    "query": "how to set up a kubernetes cluster",
+    "expected_titles": ["kubernetes-setup.md"],
+    "type": "direct_match"
+  },
+  {
+    "query": "docker container image management",
+    "expected_titles": ["docker-basics.md"],
+    "type": "direct_match"
+  },
+  {
+    "query": "configure SSL certificates for web server",
+    "expected_titles": ["nginx-ssl-config.md"],
+    "type": "direct_match"
+  },
+  {
+    "query": "database backup and restore procedures",
+    "expected_titles": ["postgresql-backup.md"],
+    "type": "direct_match"
+  },
+  {
+    "query": "container orchestration and deployment",
+    "expected_titles": ["kubernetes-setup.md", "docker-basics.md"],
+    "type": "synonym"
+  },
+  {
+    "query": "server monitoring and alerting setup",
+    "expected_titles": ["prometheus-alerting.md"],
+    "type": "synonym"
+  },
+  {
+    "query": "automating infrastructure configuration",
+    "expected_titles": ["ansible-playbooks.md"],
+    "type": "synonym"
+  },
+  {
+    "query": "secure my server from brute force attacks",
+    "expected_titles": ["fail2ban-setup.md", "ssh-key-management.md"],
+    "type": "cross_domain"
+  },
+  {
+    "query": "reverse proxy and load balancing",
+    "expected_titles": ["traefik-routing.md", "nginx-ssl-config.md"],
+    "type": "cross_domain"
+  },
+  {
+    "query": "writing automated tests for python applications",
+    "expected_titles": ["python-testing-patterns.md"],
+    "type": "direct_match"
+  },
+  {
+    "query": "designing HTTP endpoints and REST conventions",
+    "expected_titles": ["rest-api-design.md"],
+    "type": "synonym"
+  },
+  {
+    "query": "improving application speed and reducing latency",
+    "expected_titles": ["performance-benchmarking.md", "sql-query-optimization.md"],
+    "type": "cross_domain"
+  },
+  {
+    "query": "how to handle production outages and incidents",
+    "expected_titles": ["incident-response-playbook.md"],
+    "type": "direct_match"
+  },
+  {
+    "query": "DNS resolution failures and nameserver debugging",
+    "expected_titles": ["dns-troubleshooting.md"],
+    "type": "direct_match"
+  },
+  {
+    "query": "recording and tracking architectural decisions",
+    "expected_titles": ["architecture-decision-records.md"],
+    "type": "synonym"
+  }
+]
