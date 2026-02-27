@@ -50,7 +50,13 @@ No linter or type checker is configured in CI. Tests use `unittest.TestCase` (no
 
 ## Git Conventions
 
-Single branch (`main`), no branch protection configured. No CI test pipeline beyond the devcontainer prebuild workflow.
+Work on `testing` branch. Local git hooks enforce branch protection:
+- **pre-commit**: blocks direct commits to `main`
+- **pre-push**: blocks pushing to `main` from non-main branches
+
+Workflow: commit on `testing` -> `git checkout main && git merge testing && git push`
+
+No CI test pipeline beyond the devcontainer prebuild workflow.
 
 ## Architecture
 
